@@ -1,0 +1,12 @@
+{
+   "dependencies": [],
+  "domain": "ajax",
+  "name": "Ajax Alarm",
+  "version": "0.1.0",
+  "codeowners": [],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "integration_type": "hub",
+  "supported_platforms": ["sensor"]
+  }

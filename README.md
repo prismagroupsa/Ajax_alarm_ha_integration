@@ -1,0 +1,1 @@
+# Ajax Alarm Integration for Home Assistant

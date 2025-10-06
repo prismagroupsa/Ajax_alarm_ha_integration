@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ajax Alarm System",
+        "description": "Configure your Ajax alarm system",
+        "data": {
+          "login": "Login (email or phone)",
+          "password": "Password",
+          "api_key": "API Key"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Ajax Account",
+        "description": "Your Ajax tokens have expired. Please re-enter your credentials for account {account}.",
+        "data": {
+          "login": "Login (email or phone)",
+          "password": "Password",
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed. Please check your credentials.",
+      "connection_error": "Unable to connect to Ajax servers. Please try again."
+    },
+    "abort": {
+      "reauth_successful": "Re-authentication successful"
+    }
+  }
+}

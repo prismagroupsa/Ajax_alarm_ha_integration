@@ -1,0 +1,8 @@
+{
+    "name": "Ajax Integration",
+    "content_in_root": false,
+    "domains": ["alarm_control_panel"],
+    "country": ["ua", "us", "de"],
+    "homeassistant": "2023.0.0",
+    "render_readme": true
+  }
