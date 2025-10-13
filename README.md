@@ -92,3 +92,5 @@ Developed with care for the Home Assistant community.
 Secure. Private. Flexible.
 
 > _“Automation should make your home smarter — not less secure.”_
+
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/66f4c5bc-3d72-4c22-b7aa-fe275904ec9d" />
