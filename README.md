@@ -35,6 +35,16 @@ Following best practices will protect both your home network and your Ajax accou
 
 ---
 
+## ⚠️ Supported Products
+
+Actually we are supporting following products:
+- Hub 2 (4G)
+- Door Protect / Door Protect Plus
+- Motion Protect
+- Fire Protect Plus
+
+This integration is actively maintained, and new device support will be introduced in future updates.
+
 ## ⚙️ Installation Guide
 
 > 💡 **Recommended method:** via [HACS (Home Assistant Community Store)](https://hacs.xyz/)
