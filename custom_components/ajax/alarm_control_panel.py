@@ -20,22 +20,23 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     api = hass.data[DOMAIN][config_entry.entry_id]["api"]
     hubs = data.get("hubs", [])
     entities = [AjaxAlarmPanel(api, hub["hubId"]) for hub in hubs]
-    async_add_entities(entities)
+    async_add_entities(entities, update_before_add=True)
 
 
 class AjaxAlarmPanel(AlarmControlPanelEntity):
     def __init__(self, api, hub_id):
         self.api = api
         self.hub_id = hub_id
-        self._attr_name = "Ajax Hub"
+        self._attr_name = f"Ajax Hub {hub_id}"
         self._raw_state = STATE_UNKNOWN
+        self._hub_name_from_api = None
 
     def map_ajax_state_to_ha(self, state):
-        if state in ["DISARMED_NIGHT_MODE_OFF", "DISARMED_NIGHT_MODE_ON"]:
+        if state in ["DISARMED_NIGHT_MODE_OFF", "DISARMED_NIGHT_MODE_ON", "DISARMED"]:
             return AlarmControlPanelState.DISARMED
-        if state == "ARMED_NIGHT_MODE_OFF":
+        if state in ["ARMED_NIGHT_MODE_OFF", "ARMED"]:
             return AlarmControlPanelState.ARMED_AWAY
-        if state == "ARMED_NIGHT_MODE_ON":
+        if state in ["ARMED_NIGHT_MODE_ON","NIGHT_MODE"]:
             return AlarmControlPanelState.ARMED_NIGHT
         return None
 
@@ -58,12 +59,15 @@ class AjaxAlarmPanel(AlarmControlPanelEntity):
         hub_info = await self.api.get_hub_info(self.hub_id)
         _LOGGER.error("API response time: %.2f sec", time.perf_counter() - start)
         if not hub_info:
-            _LOGGER.warning("Hub info is not available for update")
+            _LOGGER.error(f"Hub info is not available for update {self.hub_id}")
             return
 
-        self._raw_state = hub_info["state"]
-        self._attr_name = f"{hub_info['name']} ({hub_info['id']})"
-        self.async_schedule_update_ha_state()
+        if hub_info:
+            self._raw_state = hub_info["state"]
+            self._hub_name_from_api = hub_info["name"]
+            if self.entity_id:
+                self.async_schedule_update_ha_state()
+
 
     async def async_alarm_disarm(self, code=None):
         _LOGGER.info("Disarm called")
@@ -106,12 +110,18 @@ class AjaxAlarmPanel(AlarmControlPanelEntity):
     def unique_id(self):
         return f"ajax_{self.hub_id}_alarm"
 
-
     @property
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, f"ajax_hub_{self.hub_id}")},
-            "name": "Ajax Hub",
+            "name": self._hub_name_from_api,
             "manufacturer": "Ajax",
             "model": "Hub",
         }
+    #
+    # @property
+    # def extra_state_attributes(self):
+    #     return {
+    #         "hub_name": self._hub_name_from_api,
+    #         "hub_id": self.hub_id
+    #     }

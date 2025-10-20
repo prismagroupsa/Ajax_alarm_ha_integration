@@ -17,3 +17,4 @@ scripts.yaml
 secrets.yaml
 home-assistant_v2.db-wal
 .HA_VERSION
+README.md

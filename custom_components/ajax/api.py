@@ -294,8 +294,10 @@ class AjaxAPI:
 
     @handle_unauthorized
     async def get_device_info(self, hub_id, device_id):
+        start = time.perf_counter()
         await self.ensure_token_valid()
         async with self.session.post(
+
                 f"{self.base_url}/api/device_info",
                 json={
                     "user_id": self.user_id,
@@ -304,10 +306,13 @@ class AjaxAPI:
                     "session_token": self.session_token
                 }
         ) as resp:
+            hit = resp.headers.get("X-Ajax-Origin-Hit")
+            _LOGGER.error("ajax origin hit=%s", hit)
             if resp.status == 204:
                 _LOGGER.info("No content returned for device info.")
                 return None
             else:
                 result = await resp.json()
+        _LOGGER.error("API get DEVICE info_time: %.2f sec", time.perf_counter() - start)
         return result
 
