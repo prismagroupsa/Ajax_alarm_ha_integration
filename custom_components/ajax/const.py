@@ -1,4 +1,3 @@
 DOMAIN = "ajax"
 
-#DEFAULT_API_URL = "http://ajax.proxy.oci.pgsa.cloud" #for prod
-DEFAULT_API_URL = "http://ajax.proxy.oci.pgsa.cloud" #for prod
+DEFAULT_API_URL = "lbe-ajax-prod-oc1-milan-01.pgsa.cloud
