@@ -36,11 +36,11 @@ def map_ajax_device(device: dict) -> list[tuple[str, dict]]:
     elif device_type in ["homesiren", "streetsiren"]:
         result.append(("binary_sensor", {}))
 
-    elif device_type in ["lifelinebutton", "button"]:
-        result.append(("button", {"device_class": "restart"}))
-
-    elif device_type == "doublebutton":
-        result.append(("button", {"device_class": "update"}))
+    # elif device_type in ["lifelinebutton", "button"]:
+    #     result.append(("button", {"device_class": "restart"}))
+    #
+    # elif device_type == "doublebutton":
+    #     result.append(("button", {"device_class": "update"}))
 
     elif device_type == "spacecontrol":
         result.append(("event", {"event_type": "ajax_remote"}))
