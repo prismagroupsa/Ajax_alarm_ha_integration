@@ -6,6 +6,8 @@
   "codeowners": [],
   "requirements": [],
   "iot_class": "cloud_polling",
+  "documentation": "https://github.com/prismagroupsa/Ajax_alarm_ha_integration",
+  "issue_tracker": "https://github.com/prismagroupsa/Ajax_alarm_ha_integration/issues",
   "config_flow": true,
   "integration_type": "hub",
   "supported_platforms": ["sensor"]
