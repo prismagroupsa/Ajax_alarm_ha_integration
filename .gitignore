@@ -1,5 +1,5 @@
 .venv/
-custom_components/ajax_custom/__pycache__/
+custom_components/ajax/__pycache__/
 .cloud/
 .storage/
 blueprints/
