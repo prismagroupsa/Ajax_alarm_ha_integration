@@ -1,7 +1,7 @@
 def map_ajax_device(device: dict) -> list[tuple[str, dict]]:
     """
     Maps an Ajax device to Home Assistant platforms.
-    
+
     Returns:
         List of tuples: (platform, {device_class, unit, ...})
     """
@@ -12,11 +12,11 @@ def map_ajax_device(device: dict) -> list[tuple[str, dict]]:
         "motionprotect", "motionprotectplus", "motionprotectoutdoor", "motionprotectcurtain"
     ]:
         result.append(("binary_sensor", {"device_class": "motion"}))
-        result.append(("sensor", {"device_class": "motion_temperature", "unit": "°C"}))
+        result.append(("sensor", {"device_class": "temperature", "unit": "°C", "sensor_type": "motion_temperature"}))
 
     elif device_type in ["doorprotect", "doorprotectplus"]:
         result.append(("binary_sensor", {"device_class": "opening"}))
-        result.append(("sensor", {"device_class": "door_temperature", "unit": "°C"}))
+        result.append(("sensor", {"device_class": "temperature", "unit": "°C", "sensor_type": "door_temperature"}))
 
     elif device_type == "glassprotect":
         result.append(("binary_sensor", {"device_class": "sound"}))
@@ -28,19 +28,12 @@ def map_ajax_device(device: dict) -> list[tuple[str, dict]]:
     elif device_type in ["fireprotect", "fireprotectplus"]:
         result.append(("binary_sensor", {"device_class": "smoke"}))
         result.append(("sensor", {"device_class": "temperature", "unit": "°C"}))
-        #result.append(("sensor", {"device_class": "carbon_monoxide", "unit": "ppm"}))
 
     elif device_type == "leaksprotect":
         result.append(("binary_sensor", {"device_class": "moisture"}))
 
     elif device_type in ["homesiren", "streetsiren"]:
         result.append(("binary_sensor", {}))
-
-    # elif device_type in ["lifelinebutton", "button"]:
-    #     result.append(("button", {"device_class": "restart"}))
-    #
-    # elif device_type == "doublebutton":
-    #     result.append(("button", {"device_class": "update"}))
 
     elif device_type == "spacecontrol":
         result.append(("event", {"event_type": "ajax_remote"}))
@@ -65,7 +58,8 @@ def map_ajax_device(device: dict) -> list[tuple[str, dict]]:
         result.append(("sensor", {"device_class": "carbon_dioxide", "unit": "ppm"}))
 
     elif device_type in ["transmitter", "multitransmitter"]:
-        result.append(("binary_sensor", {"device_class": "generic"}))
+        # No specific device_class for generic transmitters.
+        result.append(("binary_sensor", {}))
 
     elif device_type in ["hub", "ajaxhub"]:
         result.append(("alarm_control_panel", {}))

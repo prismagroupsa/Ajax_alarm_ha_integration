@@ -1,8 +1,8 @@
 {
-    "name": "Ajax Integration",
-    "content_in_root": false,
-    "domains": ["alarm_control_panel"],
-    "country": ["ua", "us", "de"],
-    "homeassistant": "2023.0.0",
-    "render_readme": true
-  }
+  "name": "Ajax Integration",
+  "content_in_root": false,
+  "domains": ["alarm_control_panel", "binary_sensor", "sensor", "switch", "siren", "event"],
+  "country": ["it", "us", "de"],
+  "homeassistant": "2024.6.0",
+  "render_readme": true
+}

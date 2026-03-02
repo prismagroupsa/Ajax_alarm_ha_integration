@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sistema di Allarme Ajax",
+        "description": "Configura il tuo sistema di allarme Ajax. Inserisci le credenziali usate nell'app Ajax.",
+        "data": {
+          "login": "Login (email o telefono)",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Ri-autenticazione Account Ajax",
+        "description": "La sessione Ajax è scaduta. Reinserisci le credenziali per l'account {account}.",
+        "data": {
+          "login": "Login (email o telefono)",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Autenticazione fallita. Verifica le credenziali.",
+      "connection_error": "Impossibile connettersi ai server Ajax. Riprova."
+    },
+    "abort": {
+      "already_configured": "Questo account Ajax è già configurato.",
+      "reauth_successful": "Ri-autenticazione completata con successo."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni Integrazione Ajax",
+        "description": "Regola le impostazioni di polling.",
+        "data": {
+          "poll_interval_disarmed": "Intervallo polling disarmato (secondi)",
+          "poll_interval_armed": "Intervallo polling armato (secondi)"
+        }
+      }
+    }
+  }
+}

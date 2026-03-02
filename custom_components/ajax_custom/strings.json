@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ajax Alarm System",
+        "description": "Configure your Ajax alarm system. Enter the credentials used in the Ajax app.",
+        "data": {
+          "login": "Login (email or phone)",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Ajax Account",
+        "description": "Your Ajax session has expired. Please re-enter your credentials for account {account}.",
+        "data": {
+          "login": "Login (email or phone)",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed. Please check your credentials.",
+      "connection_error": "Unable to connect to Ajax servers. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Ajax account is already configured.",
+      "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ajax Integration Options",
+        "description": "Adjust polling settings.",
+        "data": {
+          "poll_interval_disarmed": "Polling interval when disarmed (seconds)",
+          "poll_interval_armed": "Polling interval when armed (seconds)"
+        }
+      }
+    }
+  }
+}

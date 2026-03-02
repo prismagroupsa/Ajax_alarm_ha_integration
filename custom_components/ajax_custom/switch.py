@@ -18,22 +18,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-
 class AjaxSwitch(SwitchEntity):
-    def __init__(self, device, hub_id):
+    def __init__(self, device, meta, hub_id):
         self._device = device
+        self._meta = meta
         self.hub_id = hub_id
         self._attr_name = device.get("deviceName") + f" ({device.get('id')})"
-        self._attr_unique_id = f"ajax_{device.get('id')}"
+        self._attr_unique_id = f"ajax_{device.get('id')}_switch"
 
     @property
     def is_on(self):
         return self._device.get("state") == "on"
 
     async def async_turn_on(self, **kwargs):
-        # TODO: вызвать API для включения
+        # TODO: implement when Ajax API endpoint for switch control is identified
         pass
 
     async def async_turn_off(self, **kwargs):
-        # TODO: вызвать API для выключения
+        # TODO: implement when Ajax API endpoint for switch control is identified
         pass
