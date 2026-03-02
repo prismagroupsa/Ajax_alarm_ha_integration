@@ -1,5 +1,5 @@
 .venv/
-custom_components/ajax/__pycache__/
+custom_components/ajax_custom/__pycache__/
 .cloud/
 .storage/
 blueprints/
@@ -17,4 +17,5 @@ scripts.yaml
 secrets.yaml
 home-assistant_v2.db-wal
 .HA_VERSION
-README.md
+.DS_Store
+.claude/
