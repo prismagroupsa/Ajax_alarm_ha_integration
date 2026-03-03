@@ -22,6 +22,14 @@ _MAX_RETRIES        = 2
 _RETRY_BACKOFF_BASE = 1.0   # seconds
 _RETRY_BACKOFF_MAX  = 10.0  # seconds
 
+# Arming command retry parameters.
+# The Ajax server imposes a hard limit of 100 req/min.  On HTTP 429 (or a
+# rate-limit body message) we wait _ARMING_RETRY_WAIT seconds and retry,
+# up to _MAX_ARMING_RETRIES times before raising AjaxAPIError.
+# Same mechanism applies to any 5xx server error during arming.
+_MAX_ARMING_RETRIES = 50
+_ARMING_RETRY_WAIT  = 0.5   # seconds between arming retries
+
 
 class AjaxAPIError(Exception):
     """Exception raised for Ajax API errors."""
@@ -101,6 +109,102 @@ class AjaxAPI:
     def _backoff_delay(attempt: int) -> float:
         """Return exponential backoff delay for the given attempt index."""
         return min(_RETRY_BACKOFF_BASE * (2 ** attempt), _RETRY_BACKOFF_MAX)
+
+    @staticmethod
+    def _detect_rate_limit(status: int, data) -> bool:
+        """Return True if the server response indicates a rate limit.
+
+        Handles both HTTP 429 and Ajax-specific HTTP 200 bodies that contain
+        "exceeded the limit" (observed during real API tests with 100 req/min limit).
+        """
+        if status == 429:
+            return True
+        if isinstance(data, dict):
+            msg = data.get("message", "").lower()
+            return "exceeded the limit" in msg or "too many requests" in msg
+        if isinstance(data, str):
+            low = data.lower()
+            return "exceeded the limit" in low or "too many requests" in low
+        return False
+
+    async def _arm_command_with_retry(self, hub_id: str, command: str) -> None:
+        """POST /api/hub/arming and retry until 200/204 OK.
+
+        Retry policy (max _MAX_ARMING_RETRIES = 50, wait _ARMING_RETRY_WAIT = 0.5s):
+          - HTTP 200/204          → success, return immediately.
+          - HTTP 429 / rate-limit → wait 500ms and retry.
+          - HTTP 5xx server error → wait 500ms and retry.
+          - Network timeout/error → wait 500ms and retry.
+          - HTTP 4xx (non-429)    → not retriable, raise AjaxAPIError immediately.
+          - Exceeded max retries  → raise AjaxAPIError.
+        """
+        url = f"{self.base_url}/api/hub/arming"
+        payload = {
+            "user_id": self.user_id,
+            "hub_id": hub_id,
+            "session_token": self.session_token,
+            "command": command,
+        }
+        for attempt in range(_MAX_ARMING_RETRIES + 1):
+            try:
+                async with self.session.post(url, json=payload) as resp:
+                    if resp.status in (200, 204):
+                        _LOGGER.debug(
+                            "arm %s hub %s: OK on attempt %d",
+                            command, hub_id, attempt + 1,
+                        )
+                        return
+                    # Read body for diagnostics and rate-limit detection.
+                    try:
+                        result = await resp.json(content_type=None)
+                    except Exception:
+                        result = await resp.text()
+                    status = resp.status
+
+                if self._detect_rate_limit(status, result):
+                    if attempt < _MAX_ARMING_RETRIES:
+                        _LOGGER.warning(
+                            "arm %s hub %s: rate limited (attempt %d/%d) — retrying in %.1fs",
+                            command, hub_id, attempt + 1, _MAX_ARMING_RETRIES, _ARMING_RETRY_WAIT,
+                        )
+                        await asyncio.sleep(_ARMING_RETRY_WAIT)
+                        continue
+                    raise AjaxAPIError(
+                        f"arm {command}: rate limited after {_MAX_ARMING_RETRIES} retries"
+                    )
+
+                if status >= 500:
+                    if attempt < _MAX_ARMING_RETRIES:
+                        _LOGGER.warning(
+                            "arm %s hub %s: server error HTTP %d (attempt %d/%d) — retrying in %.1fs",
+                            command, hub_id, status, attempt + 1, _MAX_ARMING_RETRIES, _ARMING_RETRY_WAIT,
+                        )
+                        await asyncio.sleep(_ARMING_RETRY_WAIT)
+                        continue
+                    raise AjaxAPIError(
+                        f"arm {command}: server error {status} after {_MAX_ARMING_RETRIES} retries"
+                    )
+
+                # 4xx other than 429 — not retriable.
+                _LOGGER.error(
+                    "arm %s hub %s: unexpected HTTP %d: %.300s",
+                    command, hub_id, status, str(result),
+                )
+                raise AjaxAPIError(f"arm {command}: unexpected status {status}")
+
+            except (asyncio.TimeoutError, aiohttp.ClientConnectionError) as exc:
+                if attempt < _MAX_ARMING_RETRIES:
+                    _LOGGER.warning(
+                        "arm %s hub %s: network error (attempt %d/%d): %s — retrying in %.1fs",
+                        command, hub_id, attempt + 1, _MAX_ARMING_RETRIES, exc, _ARMING_RETRY_WAIT,
+                    )
+                    await asyncio.sleep(_ARMING_RETRY_WAIT)
+                else:
+                    raise AjaxAPIError(
+                        f"arm {command}: network error after {_MAX_ARMING_RETRIES} retries: {exc}"
+                    ) from exc
+
+        raise AjaxAPIError(f"arm {command}: failed after {_MAX_ARMING_RETRIES} retries")
 
     def is_token_expired(self):
         # Threshold set to 12 minutes (3-minute safety margin before actual ~15-min expiry).
@@ -236,7 +340,14 @@ class AjaxAPI:
                     "session_token": self.session_token
                 }
         ) as resp:
+            status = resp.status
             data = await resp.json()
+
+        # Rate limit: raise AjaxAPIError so coordinator/setup retry logic kicks in.
+        if self._detect_rate_limit(status, data):
+            msg = data.get("message", str(data)) if isinstance(data, dict) else str(data)
+            _LOGGER.warning("get_hubs: rate limited by server: %s", msg)
+            raise AjaxAPIError(f"get_hubs rate limited: {msg}")
 
         if isinstance(data, dict) and data.get("message") == "User is not authorized":
             _LOGGER.warning("User is not authorized in get_hubs response: %s", data)
@@ -291,8 +402,18 @@ class AjaxAPI:
                         "session_token": self.session_token
                     }
                 ) as resp:
+                    hub_info_status = resp.status
                     info = await resp.json()
+
+                # Rate limit: raise AjaxAPIError (coordinator converts to UpdateFailed → retry).
+                if self._detect_rate_limit(hub_info_status, info):
+                    msg = info.get("message", str(info)) if isinstance(info, dict) else str(info)
+                    _LOGGER.warning("get_hub_info hub %s: rate limited: %s", hub_id, msg)
+                    raise AjaxAPIError(f"get_hub_info rate limited: {msg}")
+
                 break  # success — exit loop
+            except AjaxAPIError:
+                raise  # propagate rate-limit errors without consuming retry budget
             except (asyncio.TimeoutError, aiohttp.ClientConnectionError) as e:
                 last_exc = e
                 if attempt == _MAX_RETRIES:
@@ -323,95 +444,21 @@ class AjaxAPI:
 
     @handle_unauthorized
     async def arm_hub(self, hub_id):
+        """Arm the hub (AWAY mode).  Retries up to 50 times on rate limit / server errors."""
         await self.ensure_token_valid()
-        async with self.session.post(
-                f"{self.base_url}/api/hub/arming",
-                json={
-                    "user_id": self.user_id,
-                    "hub_id": hub_id,
-                    "session_token": self.session_token,
-                    "command": "ARM"
-                }
-        ) as resp:
-            if resp.status in (200, 204):
-                _LOGGER.debug("Arm command sent successfully")
-                return None
-            # content_type=None disables aiohttp MIME type check: the server may return
-            # HTTP 5xx with Content-Type: text/plain on transient load balancer errors.
-            # Without this, aiohttp raises ContentTypeError propagated as unhandled exception.
-            try:
-                result = await resp.json(content_type=None)
-            except Exception:
-                result = await resp.text()
-            if resp.status >= 500:
-                _LOGGER.error(
-                    "arm_hub: server error HTTP %d (Content-Type: %s): %.300s",
-                    resp.status, resp.headers.get("Content-Type", "?"), str(result),
-                )
-                raise AjaxAPIError(f"Server error {resp.status} on ARM command")
-            _LOGGER.warning("arm_hub: unexpected response HTTP %d: %.300s", resp.status, str(result))
-        _LOGGER.info("Arm hub result: %s", result)
-        return result
+        await self._arm_command_with_retry(hub_id, "ARM")
 
     @handle_unauthorized
     async def disarm_hub(self, hub_id):
+        """Disarm the hub.  Retries up to 50 times on rate limit / server errors."""
         await self.ensure_token_valid()
-        async with self.session.post(
-                f"{self.base_url}/api/hub/arming",
-                json={
-                    "user_id": self.user_id,
-                    "hub_id": hub_id,
-                    "session_token": self.session_token,
-                    "command":"DISARM"
-                }
-        ) as resp:
-            if resp.status in (200, 204):
-                _LOGGER.debug("Disarm command sent successfully")
-                return None
-            # content_type=None: same fix as arm_hub — handles non-JSON error responses.
-            try:
-                result = await resp.json(content_type=None)
-            except Exception:
-                result = await resp.text()
-            if resp.status >= 500:
-                _LOGGER.error(
-                    "disarm_hub: server error HTTP %d (Content-Type: %s): %.300s",
-                    resp.status, resp.headers.get("Content-Type", "?"), str(result),
-                )
-                raise AjaxAPIError(f"Server error {resp.status} on DISARM command")
-            _LOGGER.warning("disarm_hub: unexpected response HTTP %d: %.300s", resp.status, str(result))
-        _LOGGER.info("Disarm hub result: %s", result)
-        return result
+        await self._arm_command_with_retry(hub_id, "DISARM")
 
     @handle_unauthorized
     async def arm_hub_night(self, hub_id):
+        """Arm the hub in NIGHT mode.  Retries up to 50 times on rate limit / server errors."""
         await self.ensure_token_valid()
-        async with self.session.post(
-                f"{self.base_url}/api/hub/arming",
-                json={
-                    "user_id": self.user_id,
-                    "hub_id": hub_id,
-                    "session_token": self.session_token,
-                    "command": "NIGHT_MODE_ON"
-                }
-        ) as resp:
-            if resp.status in (200, 204):
-                _LOGGER.debug("Night mode command sent successfully")
-                return None
-            # content_type=None: same fix as arm_hub — handles non-JSON error responses.
-            try:
-                result = await resp.json(content_type=None)
-            except Exception:
-                result = await resp.text()
-            if resp.status >= 500:
-                _LOGGER.error(
-                    "arm_hub_night: server error HTTP %d (Content-Type: %s): %.300s",
-                    resp.status, resp.headers.get("Content-Type", "?"), str(result),
-                )
-                raise AjaxAPIError(f"Server error {resp.status} on NIGHT_MODE_ON command")
-            _LOGGER.warning("arm_hub_night: unexpected response HTTP %d: %.300s", resp.status, str(result))
-        _LOGGER.info("Arm hub night result: %s", result)
-        return result
+        await self._arm_command_with_retry(hub_id, "NIGHT_MODE_ON")
 
     @handle_unauthorized
     async def get_hub_devices(self, hub_id):
@@ -469,8 +516,18 @@ class AjaxAPI:
                     if resp.status == 204:
                         _LOGGER.info("No content returned for device info.")
                         return None
+                    dev_status = resp.status
                     result = await resp.json()
+
+                # Rate limit: raise AjaxAPIError (coordinator converts to UpdateFailed → retry).
+                if self._detect_rate_limit(dev_status, result):
+                    msg = result.get("message", str(result)) if isinstance(result, dict) else str(result)
+                    _LOGGER.warning("get_device_info device %s: rate limited: %s", device_id, msg)
+                    raise AjaxAPIError(f"get_device_info rate limited: {msg}")
+
                 break  # success — exit loop
+            except AjaxAPIError:
+                raise  # propagate rate-limit errors without consuming retry budget
             except (asyncio.TimeoutError, aiohttp.ClientConnectionError) as e:
                 last_exc = e
                 if attempt == _MAX_RETRIES:

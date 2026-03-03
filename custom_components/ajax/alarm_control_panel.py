@@ -77,12 +77,15 @@ class AjaxAlarmPanel(CoordinatorEntity, AlarmControlPanelEntity):
     @property
     def device_info(self) -> DeviceInfo:
         d = self._data()
+        # firmware field is a dict: {version, newVersionAvailable, ...} — extract the string.
+        fw = d.get("firmware")
+        fw_version = fw.get("version") if isinstance(fw, dict) else fw
         return DeviceInfo(
             identifiers={(DOMAIN, f"ajax_hub_{self.hub_id}")},
             name=d.get("name", f"Ajax Hub {self.hub_id}"),
             manufacturer="Ajax Systems",
-            model="Hub",
-            sw_version=d.get("firmware"),
+            model=d.get("hubSubtype", "Hub"),
+            sw_version=fw_version,
         )
 
     # ── Arm/disarm commands ───────────────────────────────────────────────────
