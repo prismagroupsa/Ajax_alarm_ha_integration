@@ -128,6 +128,7 @@ For **every** Ajax device discovered, the following entities are created automat
 | LeaksProtect | Moisture binary sensor |
 | Fire Protect Plus | Smoke binary sensor, Temperature sensor |
 | HomeSiren / StreetSiren | Alarm binary sensor |
+| REX / REX 2 Extender | Connectivity binary sensor |
 
 ### Attributes on binary sensor entities
 
@@ -213,6 +214,16 @@ The alarm panel entity exposes **75 attributes** from the Ajax API, covering:
 ---
 
 ## 📋 Changelog
+
+### v0.5.2 — REX 2 Extender Support
+
+#### 🟢 New Device Support
+- **REX / REX 2 Extender** — range extenders now appear as proper devices in HA with a **Connectivity** binary sensor (online / offline state) plus the standard diagnostic entities: Battery, Signal Level, Firmware, Tamper, Online, Problem.
+
+#### 🐛 Bug Fixes
+- **Signal Level sensor** — fixed stale comment in code (cosmetic, no functional change).
+
+---
 
 ### v0.5.1 — Bug Fixes
 
