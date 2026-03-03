@@ -23,6 +23,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         coord  = hub_coordinators.get(hub_id)
         if hub_id and coord:
             entities.append(AjaxHubFirmwareSensor(coord, hub_id))
+            entities.append(AjaxHubBatterySensor(coord, hub_id))
             entities.append(AjaxHubAlarmAsMalfunctionSensor(coord, hub_id))
             entities.append(AjaxHubArmPreventionConditionsSensor(coord, hub_id))
 
@@ -149,28 +150,33 @@ class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
 # Scale 0–4 (bars), mapped from API string (e.g. "STRONG" → 4).
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SIGNAL_LEVEL_MAP: dict[str, int] = {
-    "STRONG":   4,
-    "GOOD":     3,
-    "MEDIUM":   2,
-    "FAIR":     2,
-    "LOW":      1,
-    "WEAK":     1,
-    "VERY_LOW": 0,
-    "NONE":     0,
+# Maps raw Ajax API signalLevel strings to four human-readable labels.
+# Consolidates the 8 API values into 4 meaningful tiers shown in HA.
+_SIGNAL_LEVEL_MAP: dict[str, str] = {
+    "STRONG":   "STRONG",
+    "GOOD":     "NORMAL",
+    "MEDIUM":   "NORMAL",
+    "FAIR":     "NORMAL",
+    "LOW":      "WEAK",
+    "WEAK":     "WEAK",
+    "VERY_LOW": "NO_SIGNAL",
+    "NONE":     "NO_SIGNAL",
 }
+_SIGNAL_LEVEL_OPTIONS = ["NO_SIGNAL", "WEAK", "NORMAL", "STRONG"]
 
 
 class AjaxSignalStrengthSensor(CoordinatorEntity, SensorEntity):
     """Radio signal level for all Ajax devices (diagnostic entity).
 
-    Scale 0–4 (bars), mapped from API string (e.g. 'STRONG' → 4).
+    Returns one of four string labels: NO_SIGNAL / WEAK / NORMAL / STRONG.
+    Uses SensorDeviceClass.ENUM so HA treats the value as a named state.
     """
 
     _attr_has_entity_name = True
     _attr_available       = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_state_class     = SensorStateClass.MEASUREMENT
+    _attr_device_class    = SensorDeviceClass.ENUM
+    _attr_options         = _SIGNAL_LEVEL_OPTIONS
     _attr_icon            = "mdi:wifi"
 
     def __init__(self, coordinator, device, hub_id):
@@ -182,13 +188,11 @@ class AjaxSignalStrengthSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"ajax_{device_id}_signal_level"
 
     @property
-    def native_value(self):
+    def native_value(self) -> str | None:
         d = self.coordinator.data
         if not d:
             return None
         raw = d.get("signalLevel")
-        if isinstance(raw, int):
-            return raw
         if isinstance(raw, str):
             return _SIGNAL_LEVEL_MAP.get(raw.upper())
         return None
@@ -259,7 +263,64 @@ class AjaxHubFirmwareSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         d = self.coordinator.data
-        return d.get("firmware") if d else None
+        if not d:
+            return None
+        fw = d.get("firmware")
+        # firmware is returned as dict {version, newVersionAvailable, ...} by the API.
+        if isinstance(fw, dict):
+            return fw.get("version")
+        return fw
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"ajax_hub_{self.hub_id}")},
+            name=f"Ajax Hub {self.hub_id}",
+            manufacturer="Ajax Systems",
+            model="Hub",
+        )
+
+
+class AjaxHubBatterySensor(CoordinatorEntity, SensorEntity):
+    """Battery level and state for the Ajax hub (diagnostic entity).
+
+    The hub exposes battery as a dict: {chargeLevelPercentage, state}.
+    native_value = chargeLevelPercentage (integer %).
+    extra_state_attributes = {battery_state, externally_powered}.
+    """
+
+    _attr_has_entity_name               = True
+    _attr_available                     = True
+    _attr_device_class                  = SensorDeviceClass.BATTERY
+    _attr_native_unit_of_measurement    = "%"
+    _attr_state_class                   = SensorStateClass.MEASUREMENT
+    _attr_entity_category               = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, hub_id: str):
+        super().__init__(coordinator)
+        self.hub_id          = hub_id
+        self._attr_name      = "Battery"
+        self._attr_unique_id = f"ajax_hub_{hub_id}_battery"
+
+    @property
+    def native_value(self):
+        d = self.coordinator.data
+        if not d:
+            return None
+        battery = d.get("battery")
+        if isinstance(battery, dict):
+            return battery.get("chargeLevelPercentage")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        d = self.coordinator.data or {}
+        battery = d.get("battery") or {}
+        return {
+            "battery_state":      battery.get("state") if isinstance(battery, dict) else None,
+            "externally_powered": d.get("externallyPowered"),
+            "charging_mode":      d.get("chargingMode"),
+        }
 
     @property
     def device_info(self) -> DeviceInfo:

@@ -35,9 +35,7 @@ Following best practices will protect both your home network and your Ajax accou
 
 ---
 
-## ⚠️ Supported Products
-
-The following devices are currently supported:
+## ✅ Supported Devices
 
 | Device | Binary Sensor | Temperature Sensor | Notes |
 |---|---|---|---|
@@ -49,6 +47,7 @@ The following devices are currently supported:
 | Motion Protect Curtain | Motion | Temperature | + masked state |
 | LeaksProtect | Moisture | — | leakDetected field |
 | Fire Protect Plus | Smoke | Temperature | CO, smoke, temp, high-temp-diff alarms |
+| HomeSiren / StreetSiren | Alarm active | — | Volume, duration, blink config |
 
 This integration is actively maintained, and new device support will be introduced in future updates.
 
@@ -81,10 +80,12 @@ This integration is actively maintained, and new device support will be introduc
 - 📱 Customize notifications, triggers, and automations using Lovelace dashboards.
 - ⚙️ Simple configuration and automatic entity discovery.
 - 🔋 Per-device battery, signal strength, firmware, tamper, connectivity and problem entities — all in the Diagnostics section.
+- 🔋 **Hub battery sensor** — monitors the hub's internal backup battery level and charge state.
 - 📡 Shared polling coordinator — adaptive polling (30s disarmed / 60s armed).
 - 🔒 Password transmitted as SHA256 hash — never in plaintext.
 - ⚙️ Post-setup options flow — adjust polling intervals without reconfiguring.
 - 🩺 Diagnostics support — export anonymized debug data via HA diagnostics UI.
+- 🔁 **Auto-retry on rate limit** — arm/disarm/night mode commands automatically retry up to 50 times if the Ajax server is temporarily busy, without requiring user action.
 
 ---
 
@@ -92,11 +93,12 @@ This integration is actively maintained, and new device support will be introduc
 
 | Feature | Status | Notes |
 |---|---|---|
-| **Switch `turn_on` / `turn_off`** | 🔴 Not implemented 
-| **Siren `turn_on` / `turn_off`** | 🔴 Not implemented 
-| **Night mode bypass malfunctions** | ℹ️ Hub-side behavior 
-| **Real-time push events** | 🟡 Polling only
-| **Groups / partitions** | 🔴 Not implemented 
+| **Switch `turn_on` / `turn_off`** | 🔴 Not implemented | Relay / WallSwitch control not yet available |
+| **Siren control (`turn_on` / `turn_off`)** | 🔴 Not implemented | Alarm state is monitored; manual trigger not supported |
+| **Night mode bypass malfunctions** | ℹ️ Hub-side behavior | The hub may arm bypassing active malfunctions — this is normal Ajax behaviour |
+| **Real-time push events** | 🟡 Polling only | State is refreshed every 30s (disarmed) or 60s (armed) |
+| **Groups / partitions** | 🔴 Not implemented | All zones are treated as a single partition |
+| **Arm / Disarm timeout** | ℹ️ Max 60s | If the server is unreachable for >60s, the command fails with an explicit error — check hub status in the Ajax app |
 
 ---
 
@@ -109,7 +111,7 @@ For **every** Ajax device discovered, the following entities are created automat
 | Entity | Type | Field | Description |
 |---|---|---|---|
 | `{name} Battery` | Sensor (%) | `batteryChargeLevelPercentage` | Battery level |
-| `{name} Signal Level` | Sensor (0–4) | `signalLevel` | Radio signal strength |
+| `{name} Signal Level` | Sensor (enum) | `signalLevel` | Radio signal: NO_SIGNAL / WEAK / NORMAL / STRONG |
 | `{name} Firmware` | Sensor (string) | `firmwareVersion` | Firmware version |
 | `{name} Tamper` | Binary sensor | `tampered` | Tamper detection |
 | `{name} Online` | Binary sensor | `online` | Device connectivity |
@@ -123,6 +125,7 @@ For **every** Ajax device discovered, the following entities are created automat
 | Motion Protect / Plus / Curtain | Motion binary sensor, Temperature sensor |
 | LeaksProtect | Moisture binary sensor |
 | Fire Protect Plus | Smoke binary sensor, Temperature sensor |
+| HomeSiren / StreetSiren | Alarm binary sensor |
 
 ### Attributes on binary sensor entities
 
@@ -132,20 +135,38 @@ All device binary sensors expose the following attributes:
 |---|---|
 | `battery` | `batteryChargeLevelPercentage` |
 | `online` | `online` |
-| `signal_level` | `signalLevel` |
+| `signal_level` | `signalLevel` (mapped: NO_SIGNAL / WEAK / NORMAL / STRONG) |
 | `tampered` | `tampered` |
 | `temperature` | `temperature` |
 | `firmware` | `firmwareVersion` |
 | `state_raw` | `state` |
 | `bypass_state` | `bypassState` |
 | `issues_count` | `issuesCount` |
-| `arming_state` | `estimatedArmingState` |
 | `malfunctions` | `malfunctions` |
 | `arming_mode` | `armingMode` |
+| `arming_state` | `estimatedArmingState` |
+| `night_mode_arm` | `nightModeArm` |
+| `arm_delay_seconds` | `armDelaySeconds` |
+| `alarm_delay_seconds` | `alarmDelaySeconds` |
+| `arm_delay_night_seconds` | `armDelaySecondsInNightMode` |
+| `alarm_delay_night_seconds` | `alarmDelaySecondsInNightMode` |
+| `apply_delays_night_mode` | `applyDelaysToNightMode` |
+| `always_active` | `alwaysActive` |
+| `confirms_alarm` | `confirmsAlarm` |
+| `verifies_alarm` | `verifiesAlarm` |
+| `group_id` | `groupId` |
+| `room_id` | `roomId` |
+| `color` | `color` |
+| `capabilities` | `capabilities` |
+| `siren_triggers` | `sirenTriggers` |
+| `self_monitoring_config` | `selfMonitoringConfig` |
+| `indicator_light_mode` | `indicatorLightMode` |
 
 **Door Protect / Plus** additionally exposes: `reed_closed`, `extra_contact_closed`, `reed_contact_configured`, `extra_contact_configured`, `two_stage_arming_role`, and (Plus only) `extra_contact_type`, `shock_sensor_configured`, `shock_sensor_sensitivity`, `tilt_sensor_configured`, `tilt_degrees`.
 
 **Motion Protect / Plus / Curtain** additionally exposes: `sensitivity`, `pet_immunity`, `masked`, `antimasking`.
+
+**HomeSiren / StreetSiren** additionally exposes: `alarm_duration`, `siren_volume_level`, `beep_volume_level`, `beep_on_arm_disarm`, `blink_while_armed`, `post_alarm_indication_mode`, `alarm_restriction_mode`, `chimes_enabled`, `act_on_arming`.
 
 ---
 
@@ -156,7 +177,8 @@ The Ajax Hub creates the following entities, all linked to the same device card:
 | Entity | Type | Description |
 |---|---|---|
 | `Ajax Hub {id}` | Alarm Control Panel | Arm / Disarm / Night mode |
-| `Ajax Hub {id} Firmware` | Sensor | Hub firmware version |
+| `Ajax Hub {id} Firmware` | Sensor | Hub firmware version string |
+| `Ajax Hub {id} Battery` | Sensor (%) | Hub internal battery level and charge state |
 | `Ajax Hub {id} Alarm As Malfunction Arming` | Sensor | `alarmAsMalfunctionWhenArming` flag |
 | `Ajax Hub {id} Arm Prevention Conditions` | Sensor | Count of active arm prevention conditions |
 | `Ajax Hub {id} Tamper` | Binary sensor | Hub tamper state |
@@ -189,6 +211,35 @@ The alarm panel entity exposes **75 attributes** from the Ajax API, covering:
 ---
 
 ## 📋 Changelog
+
+### v0.5.1 — Bug Fixes
+
+#### 🐛 Bug Fixes
+- **Signal Level sensor** — now returns a human-readable label (`NO_SIGNAL` / `WEAK` / `NORMAL` / `STRONG`) instead of a raw numeric value (0–4). The sensor uses the HA `ENUM` device class for proper state display and translation.
+- **Arm / Disarm / Night mode timeout** — retry window extended to 60 attempts × 1s (60s total). On timeout, a clear error is logged: *"command timed out — the Ajax server did not confirm the operation after 60 attempts. Please verify the hub status in the Ajax app and try again."*
+- **Setup retry timing** — integration setup retries are now aligned to 1s intervals (60 attempts max), consistent with arm command behaviour.
+
+---
+
+### v0.5.0 — Reliability & Device Attributes
+
+#### 🟢 New Entities
+- **Hub Battery sensor** — exposes the hub's internal backup battery percentage, charge state (`CHARGED`, `CHARGING`, `DISCHARGING`), external power status and charging mode. Appears as a diagnostic sensor on the hub device card.
+- **HomeSiren / StreetSiren support** — sirens now have a dedicated `Alarm` binary sensor (active during triggered states) with siren-specific attributes: `alarm_duration`, `siren_volume_level`, `beep_volume_level`, `post_alarm_indication_mode`, `chimes_enabled`, and more.
+
+#### 🟠 Improved Reliability
+- **Arm / Disarm / Night mode auto-retry** — commands now automatically retry up to 50 times (500ms between attempts) when the server is temporarily rate-limited or unavailable. No user action required — HA will confirm the state change once the server accepts the command.
+- **Setup retry on rate limit** — if the Ajax server rate-limits requests during integration startup (common with many devices), the setup now waits and retries automatically instead of failing and requiring a manual restart.
+- **Rate limit detection** — the integration now correctly detects both HTTP 429 responses and the Ajax server's `"exceeded the limit"` message body, which is returned as HTTP 200 in some cases.
+
+#### 🐛 Bug Fixes
+- **Hub firmware version** — the `Firmware` sensor and hub device card now correctly show the firmware version string (e.g. `2.36.123`) instead of the raw API object.
+- **Hub model** — the hub device card now shows the actual model identifier from the API (e.g. `HUB_2`) instead of the generic label `Hub`.
+
+#### 🟡 More Device Attributes
+All device binary sensors expose 17 additional attributes from the Ajax API, including arming delays (`arm_delay_seconds`, `alarm_delay_seconds`, night mode variants), alarm confirmation flags (`confirms_alarm`, `verifies_alarm`), and device metadata (`group_id`, `room_id`, `color`, `capabilities`, `siren_triggers`, `indicator_light_mode`).
+
+---
 
 ### v0.4.2 — Code Quality & Documentation
 

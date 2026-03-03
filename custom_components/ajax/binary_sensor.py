@@ -42,6 +42,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.append(AjaxProblemBinarySensor(coord, device, hub_id))
 
             # Platform-specific sensors
+            dtype = device.get("deviceType", "").lower()
             for platform, meta in map_ajax_device(device):
                 if platform != "binary_sensor":
                     continue
@@ -54,6 +55,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     entity = MotionProtectBinarySensor(coord, device, meta, hub_id)
                 elif dc == "moisture":
                     entity = LeaksProtectBinarySensor(coord, device, meta, hub_id)
+                elif not dc and dtype in ("homesiren", "streetsiren"):
+                    entity = HomeSirenBinarySensor(coord, device, meta, hub_id)
                 else:
                     entity = AjaxBinarySensor(coord, device, meta, hub_id)
                 entities.append(entity)
@@ -103,18 +106,38 @@ class AjaxBinarySensor(CoordinatorEntity, BinarySensorEntity):
     def extra_state_attributes(self) -> dict:
         d = self._data()
         return {
-            "battery":      d.get("batteryChargeLevelPercentage"),
-            "online":       d.get("online"),
-            "signal_level": d.get("signalLevel"),
-            "tampered":     d.get("tampered"),
-            "temperature":  d.get("temperature"),
-            "firmware":     d.get("firmwareVersion"),
-            "state_raw":    d.get("state"),
-            "bypass_state": d.get("bypassState"),
-            "issues_count": d.get("issuesCount"),
-            "arming_state": d.get("estimatedArmingState"),
-            "malfunctions": d.get("malfunctions"),
-            "arming_mode":  d.get("armingMode"),
+            # ── Status ────────────────────────────────────────────────────────
+            "battery":                   d.get("batteryChargeLevelPercentage"),
+            "online":                    d.get("online"),
+            "signal_level":              d.get("signalLevel"),
+            "tampered":                  d.get("tampered"),
+            "temperature":               d.get("temperature"),
+            "firmware":                  d.get("firmwareVersion"),
+            "state_raw":                 d.get("state"),
+            "bypass_state":              d.get("bypassState"),
+            "issues_count":              d.get("issuesCount"),
+            "malfunctions":              d.get("malfunctions"),
+            # ── Arming ────────────────────────────────────────────────────────
+            "arming_mode":               d.get("armingMode"),
+            "arming_state":              d.get("estimatedArmingState"),
+            "night_mode_arm":            d.get("nightModeArm"),
+            "arm_delay_seconds":         d.get("armDelaySeconds"),
+            "alarm_delay_seconds":       d.get("alarmDelaySeconds"),
+            "arm_delay_night_seconds":   d.get("armDelaySecondsInNightMode"),
+            "alarm_delay_night_seconds": d.get("alarmDelaySecondsInNightMode"),
+            "apply_delays_night_mode":   d.get("applyDelaysToNightMode"),
+            "always_active":             d.get("alwaysActive"),
+            # ── Alarm confirmation ─────────────────────────────────────────────
+            "confirms_alarm":            d.get("confirmsAlarm"),
+            "verifies_alarm":            d.get("verifiesAlarm"),
+            # ── Device metadata ───────────────────────────────────────────────
+            "group_id":                  d.get("groupId"),
+            "room_id":                   d.get("roomId"),
+            "color":                     d.get("color"),
+            "capabilities":              d.get("capabilities"),
+            "siren_triggers":            d.get("sirenTriggers"),
+            "self_monitoring_config":    d.get("selfMonitoringConfig"),
+            "indicator_light_mode":      d.get("indicatorLightMode"),
         }
 
     @property
@@ -372,6 +395,45 @@ class FireProtectBinarySensor(AjaxBinarySensor):
             "temperature_alarm":      d.get("temperatureAlarmDetected"),
             "temperature_rise_alarm": d.get("highTemperatureDiffDetected"),
             "co_alarm":               d.get("coAlarmDetected"),
+        })
+        return attrs
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HOME SIREN / STREET SIREN
+# ─────────────────────────────────────────────────────────────────────────────
+
+class HomeSirenBinarySensor(AjaxBinarySensor):
+    """Binary sensor for HomeSiren / StreetSiren devices.
+
+    is_on = True when the siren is in an active alarm state.
+    Extra attributes expose siren-specific configuration from /api/device_info.
+    """
+
+    def __init__(self, coordinator, device, meta, hub_id):
+        super().__init__(coordinator, device, meta, hub_id)
+        self._attr_name = "Alarm"
+
+    @property
+    def is_on(self):
+        d = self._data()
+        return d.get("state", "") in _ALARM_STATES
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        attrs = super().extra_state_attributes
+        d = self._data()
+        attrs.update({
+            "alarm_duration":             d.get("alarmDuration"),
+            "beep_on_arm_disarm":         d.get("beepOnArmDisarm"),
+            "blink_while_armed":          d.get("blinkWhileArmed"),
+            "siren_volume_level":         d.get("sirenVolumeLevel"),
+            "beep_volume_level":          d.get("beepVolumeLevel"),
+            "post_alarm_indication_mode": d.get("postAlarmIndicationMode"),
+            "alarm_restriction_mode":     d.get("alarmRestrictionMode"),
+            "chimes_enabled":             d.get("chimesEnabled"),
+            "beep_on_delay":              d.get("beepOnDelay"),
+            "act_on_arming":              d.get("actOnArming"),
         })
         return attrs
 

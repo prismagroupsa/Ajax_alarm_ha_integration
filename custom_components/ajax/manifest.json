@@ -2,7 +2,7 @@
   "dependencies": [],
   "domain": "ajax",
   "name": "Ajax Alarm",
-  "version": "0.4.2",
+  "version": "0.5.1",
   "codeowners": ["@riki-90;@vale76p"],
   "requirements": [],
   "iot_class": "cloud_polling",
