@@ -48,6 +48,8 @@ Following best practices will protect both your home network and your Ajax accou
 | LeaksProtect | Moisture | — | leakDetected field |
 | Fire Protect Plus | Smoke | Temperature | CO, smoke, temp, high-temp-diff alarms |
 | HomeSiren / StreetSiren | Alarm active | — | Volume, duration, blink config |
+| REX 2 | Extender Sensor | Battery | Signal + extra contact |
+
 
 This integration is actively maintained, and new device support will be introduced in future updates.
 

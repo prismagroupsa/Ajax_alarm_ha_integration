@@ -147,7 +147,7 @@ class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SIGNAL STRENGTH — Diagnostic for all devices
-# Scale 0–4 (bars), mapped from API string (e.g. "STRONG" → 4).
+# Maps raw API string (e.g. "STRONG", "GOOD") to one of four labels: NO_SIGNAL / WEAK / NORMAL / STRONG.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Maps raw Ajax API signalLevel strings to four human-readable labels.
