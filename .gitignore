@@ -19,3 +19,6 @@ home-assistant_v2.db-wal
 .HA_VERSION
 .DS_Store
 .claude/
+/_working
+doc/
+CLAUDE.md
